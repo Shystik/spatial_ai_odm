@@ -270,3 +270,11 @@ Tr 0.000000
 illum 1
 Ns 1.000000
 map_Kd odm_textured_model_geo_material0033_map_Kd.png
+newmtl material0034
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Tr 0.000000
+illum 1
+Ns 1.000000
+map_Kd odm_textured_model_geo_material0034_map_Kd.png
