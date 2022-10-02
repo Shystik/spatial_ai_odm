@@ -1,0 +1,5 @@
+https://towardsdatascience.com/how-to-automate-3d-point-cloud-segmentation-and-clustering-with-python-343c9039e4f5
+https://docs.opendronemap.org/arguments/
+https://github.com/OpenDroneMap/ODM
+https://github.com/OpenDroneMap/odm_data_aukerman/tree/master
+https://github.com/leomariga/pyRANSAC-3D

@@ -1,0 +1,1 @@
+docker run -ti --rm -v c:/odm/datasets:/datasets --gpus all opendronemap/odm:gpu --project-path /datasets project --auto-boundary --dsm --dtm pc-quality medium
