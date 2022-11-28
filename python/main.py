@@ -7,6 +7,8 @@ import math
 import itertools
 import scipy
 from functools import reduce
+from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
 
 # Read .ply file
 INPUT_FILE = "odm_mesh.ply"
@@ -75,28 +77,26 @@ if __name__ == "__main__":
     )
     out_liners = get_point_cloud_above_plane(old_points, plane_model)
     outlier_cloud = pcd.select_by_index(out_liners)
-    outlier_cloud.paint_uniform_color([0.6, 0.6, 0.6])
-    # new_points = transfer_points_to_z0(np.asarray(outlier_cloud.points), plane_model[2])
-    new_points = np.asarray(outlier_cloud.points)
-    res_volume = 0
-    while new_points.size > 0:
-        points_to_process = get_points_in_radius(new_points[0], new_points, MAX_RADIUS)
-        xy_catalog = []
-        for index in points_to_process:
-            xy_catalog.append([new_points[index][0], new_points[index][1]])
+    labels = np.array(
+        outlier_cloud.cluster_dbscan(eps=6.5, min_points=100, print_progress=False)
+    )
 
-        triangles = scipy.spatial.Delaunay(np.array(xy_catalog))
-        surface = o3d.geometry.TriangleMesh()
-        surface.vertices = o3d.utility.Vector3dVector(
-            [new_points[index] for index in points_to_process]
-        )
-        surface.triangles = o3d.utility.Vector3iVector(triangles.simplices)
-        volume = reduce(
-            lambda a, b: a + volume_under_triangle(b),
-            get_triangles_vertices(surface.triangles, surface.vertices),
-            0,
-        )
-        res_volume += volume
-        new_points = np.delete(new_points, points_to_process, 0)
-    # o3d.visualization.draw_geometries([outlier_cloud.select_by_index(points_to_process)])
+    max_label = max(labels)
+    colors = plt.get_cmap("tab20")(labels / (max_label if max_label > 0 else 1))
+    colors[labels < 0] = 0
+    outlier_cloud.colors = o3d.utility.Vector3dVector(colors[:, :3])
+    color_set = set()
+    for color in outlier_cloud.colors:
+        color_set.add(tuple(color))
+    res_volume = 0
+    for color_index, point_cloud_color in enumerate(color_set):
+        local_point_index = []
+        for index, color in enumerate(np.array(outlier_cloud.colors)):
+            if tuple(color) == point_cloud_color and tuple(color) != (0, 0, 0):
+                local_point_index.append(index)
+        if local_point_index:
+            local_point_cloud = outlier_cloud.select_by_index(local_point_index)
+            if local_point_cloud:
+                res_volume += local_point_cloud.get_oriented_bounding_box().volume()
+            o3d.visualization.draw_geometries([local_point_cloud])
     print(res_volume)
