@@ -9,10 +9,11 @@ import scipy
 from functools import reduce
 from sklearn.cluster import KMeans
 from sklearn.cluster import DBSCAN
+import random
 
 # Read .ply file
 INPUT_FILE = "odm_mesh.ply"
-MAX_RADIUS = 30.0
+MAX_RADIUS = 150.0
 
 
 def get_triangles_vertices(input_triangles, vertices):
@@ -69,6 +70,110 @@ def get_points_in_radius(input_point: np.array, points: np.array, radius: float)
     return res_indexes
 
 
+
+def is_in_box(center, extent, point):
+      if point[0] > (center[0] + extent[0]) or point[0] < (center[0] - extent[0]):
+          return False
+      if point[1] > (center[1] + extent[1]) or point[1] < (center[1] - extent[1]):
+          return False
+      if point[2] > (center[2] + extent[2]) or point[2] < (center[2] - extent[2]):
+          return False
+      return True
+
+
+def get_volume(points_to_process: np.array, new_points: np.array):
+    if len(points_to_process) <= 0:
+        return 0
+    xy_catalog = []
+    for index in points_to_process:
+        xy_catalog.append([new_points[index][0], new_points[index][1]])
+    if len(xy_catalog) <= 0:
+        return 0
+    triangles = scipy.spatial.Delaunay(np.array(xy_catalog))
+    surface = o3d.geometry.TriangleMesh()
+    surface.vertices = o3d.utility.Vector3dVector(
+        [new_points[index] for index in points_to_process]
+    )
+    surface.triangles = o3d.utility.Vector3iVector(triangles.simplices)
+    volume = reduce(
+        lambda a, b: a + volume_under_triangle(b),
+        get_triangles_vertices(surface.triangles, surface.vertices),
+        0,
+    )
+
+    return volume
+
+def build_drone_path(outlier_cloud):
+    outlier_cloud.paint_uniform_color([0.6, 0.6, 0.6])
+
+    colorOur = np.array(outlier_cloud.colors)
+    new_points = np.asarray(outlier_cloud.points)
+
+    bbbox = outlier_cloud.get_oriented_bounding_box()
+
+    center = bbbox.center.copy()
+    extent = bbbox.extent.copy()
+
+    dicrection = [1, -1]
+    x_direct = random.choice(dicrection)
+    y_direct = random.choice(dicrection)
+    currentPoint = [center[0] + (extent[0] * x_direct), center[1] + (extent[1] * y_direct), center[2] + (extent[2])]
+
+    y_direct = 1 if y_direct == -1 else -1
+    x_direct = 1 if x_direct == -1 else -1
+
+    pointColor = [0.2, 0.5, 0.75]
+
+    pointsWays = [currentPoint]
+    colorsWays = [pointColor]
+
+    # Изначальная модель
+    o3d.visualization.draw_geometries([outlier_cloud])
+
+    while new_points.size > 0:
+        if not is_in_box(center, extent, currentPoint):
+            # print('test is_in_box BREAK', x_direct, y_direct, currentPoint)
+            break
+
+        points_to_process = get_points_in_radius(currentPoint, new_points, MAX_RADIUS)
+        volume = get_volume(points_to_process, new_points)
+
+        colorOur[points_to_process] = [1, 0, 0.75]
+        outlier_cloud.colors = o3d.utility.Vector3dVector(colorOur)
+        if volume > 100:
+            print('Set point view: ', currentPoint)
+            pointsWays.append(currentPoint.copy())
+            colorsWays.append(pointColor)
+            # Просмотр текущего состояния (Можно включить)
+            #o3d.visualization.draw_geometries([outlier_cloud])
+
+        colors = np.array(outlier_cloud.colors)
+        test_colors = colors[colors == [0.6, 0.6, 0.6]]
+
+        if test_colors.size == 0:
+            print('End build way!')
+            break
+
+        if not is_in_box(center, extent, [currentPoint[0], currentPoint[1] + MAX_RADIUS * y_direct, currentPoint[2]]):
+            currentPoint[0] += (MAX_RADIUS) * x_direct
+            y_direct = 1 if y_direct == -1 else -1
+        else:
+            currentPoint[1] += MAX_RADIUS * y_direct
+            # print('test is_in_box in end check false', currentPoint)
+
+    # Добавление точке просмотра дрона
+    pointsOur = np.asarray(outlier_cloud.points)
+    colorsMain = np.asarray(outlier_cloud.colors)
+
+    pointsOur = np.concatenate((pointsOur, pointsWays), axis=0)
+    colorsMain = np.concatenate((colorsMain, colorsWays), axis=0)
+
+    outlier_cloud.points = o3d.utility.Vector3dVector(pointsOur)
+    outlier_cloud.colors = o3d.utility.Vector3dVector(colorsMain)
+
+    # Фиальная визуализация маршрута
+    o3d.visualization.draw_geometries([outlier_cloud])
+
 if __name__ == "__main__":
     pcd = o3d.io.read_point_cloud(INPUT_FILE)
     old_points = np.asarray(pcd.points)
@@ -100,3 +205,6 @@ if __name__ == "__main__":
                 res_volume += local_point_cloud.get_oriented_bounding_box().volume()
             o3d.visualization.draw_geometries([local_point_cloud])
     print(res_volume)
+
+    # Построение пути
+    build_drone_path(outlier_cloud)
