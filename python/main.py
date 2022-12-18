@@ -174,6 +174,9 @@ def build_drone_path(outlier_cloud):
     # Фиальная визуализация маршрута
     o3d.visualization.draw_geometries([outlier_cloud])
 
+    # Сохранение маршрута в файл
+    o3d.io.write_point_cloud("/datasets/images/way_fly.ply", outlier_cloud)
+
 if __name__ == "__main__":
     pcd = o3d.io.read_point_cloud(INPUT_FILE)
     old_points = np.asarray(pcd.points)
